@@ -4,7 +4,7 @@ const createTransaction = require("../utility/creditTransiction");
 
 const getClient = async (req, res) => {
   try {
-    const { _id } = req.user;
+    const { _id } = req?.user;
     const clientInfo = await User.findById(_id)
       .populate({
         path: "customers",
@@ -161,9 +161,14 @@ const getCustomerRequests = async (req, res) => {
 
     const requests = await User.findById(user).select("receiveRequests");
 
-    const respData = await Promise.all(requests?.receiveRequests?.map((requestId) => {
-      return Request.find({user: requestId}).populate({path:"user", select: "name mobile"});
-    }))
+    const respData = await Promise.all(
+      requests?.receiveRequests?.map((requestId) => {
+        return Request.find({ user: requestId }).populate({
+          path: "user",
+          select: "name mobile",
+        });
+      })
+    );
 
     if (!requests) throw new Error("there are no Requests.");
 
@@ -179,6 +184,60 @@ const getCustomerRequests = async (req, res) => {
   }
 };
 
+const getClientCustomers = async (req, res) => {
+  try {
+    const clientId = req.user._id;
+    // Check if client ID is present
+    if (!clientId) {
+      return res.status(404).json({
+        message: "Client not found",
+      });
+    }
+    // Find the client in the database
+    const client = await User.findOne({ _id: clientId });
+    // Check if the client exists
+    if (!client) {
+      return res.status(404).json({
+        message: "Client not found in database",
+      });
+    }
+    // Convert customer IDs to strings
+    const customerIds = client.customers.map((customerId) =>
+      customerId.toString()
+    );
+
+    // Check if there are customer IDs
+    if (!customerIds.length) {
+      return res.status(404).json({
+        message: "No customers associated with client",
+      });
+    }
+    // Find customers in the database
+    const customers = await User.find({ _id: { $in: customerIds } });
+    // Check if customers were found
+    if (!customers.length) {
+      return res.status(404).json({
+        message: "Customers not found in database",
+      });
+    }
+    // Extract customer names
+    const customerNamesAndId = customers.map((customer) => ({
+      name: customer.name,
+      id: customer._id,
+    }));
+
+    return res.status(200).json({
+      customerNamesAndId,
+      message: "Client customers fetched successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: error.message,
+      data: null,
+    });
+  }
+};
+
 module.exports = {
   getClient,
   createCustomer,
@@ -186,4 +245,5 @@ module.exports = {
   purchaseRequestFromAdmin,
   getRequests,
   getCustomerRequests,
+  getClientCustomers,
 };
